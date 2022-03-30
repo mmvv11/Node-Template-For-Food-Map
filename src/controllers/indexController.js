@@ -2,194 +2,226 @@ const { pool } = require("../../config/database");
 const { logger } = require("../../config/winston");
 const jwt = require("jsonwebtoken");
 const secret = require("../../config/secret");
-
 const indexDao = require("../dao/indexDao");
 
-// 회원가입
-exports.signUp = async function (req, res) {
-  const { userID, name } = req.body;
-
-  // userID 8~20자 사이여야한다.
-  userIDLen = userID.length;
-  if (userIDLen < 8 || userIDLen > 20) {
-    return res.send({
-      isSuccess: false,
-      code: 400,
-      message: "userID 길이를 8~20으로 설정해주세요.",
-    });
-  }
-  // name 영어로만 할 것.
-  var eng = /^[a-zA-Z]*$/;
-  if (!eng.test(name)) {
-    return res.send({
-      isSuccess: false,
-      code: 400,
-      message: "name은 영어만 가능합니다.",
-    });
-  }
+// 학생 삭제
+exports.deleteStudent = async function (req, res) {
+  const { studentIdx } = req.params;
 
   try {
     const connection = await pool.getConnection(async (conn) => conn);
     try {
-      const rows = await indexDao.insertUser(connection, userID, name);
-
-      return res.send({
-        isSuccess: true,
-        code: 200,
-        message: "회원가입 성공",
-      });
-    } catch (err) {
-      logger.error(`signUp Query error\n: ${JSON.stringify(err)}`);
-      return false;
-    } finally {
-      connection.release();
-    }
-  } catch (err) {
-    logger.error(`signUp DB Connection error\n: ${JSON.stringify(err)}`);
-    return false;
-  }
-};
-
-// 로그인
-exports.signIn = async function (req, res) {
-  const { userId, userPassword } = req.body;
-
-  if (!userId || !userPassword) {
-    res.send({
-      isSuccess: false,
-      code: 400,
-      message: "회원정보를 입력해주세요.",
-    });
-  }
-
-  try {
-    const connection = await pool.getConnection(async (conn) => conn);
-    try {
-      const [userInfoRows] = await indexDao.isValidUser(
+      const isValidStudentIdx = await indexDao.isValidStudentIdx(
         connection,
-        userId,
-        userPassword
+        studentIdx
       );
-
-      if (userInfoRows.length <= 0) {
+      if (!isValidStudentIdx) {
         return res.send({
           isSuccess: false,
-          code: 410,
-          message: "로그인 정보가 올바르지 않습니다.",
+          code: 410, // 요청 실패시 400번대 코드
+          message: "유효한 학생 인덱스가 아닙니다.",
         });
       }
 
-      // 토큰 생성
-      const token = jwt.sign(
-        {
-          masterUserIdx: userInfoRows[0].masterUserIdx,
-        }, // payload
-        secret.jwtsecret // secret
-      );
+      const [rows] = await indexDao.deleteStudent(connection, studentIdx);
 
       return res.send({
-        result: {
-          masterUserIdx: userInfoRows[0].masterUserIdx,
-          jwt: token,
-        },
         isSuccess: true,
-        code: 200,
-        message: "로그인 성공",
+        code: 200, // 요청 실패시 400번대 코드
+        message: "학생 삭제 성공",
       });
     } catch (err) {
-      logger.error(`signIn Query error\n: ${JSON.stringify(err)}`);
+      logger.error(`deleteStudent Query error\n: ${JSON.stringify(err)}`);
       return false;
     } finally {
       connection.release();
     }
   } catch (err) {
-    logger.error(`signIn DB Connection error\n: ${JSON.stringify(err)}`);
+    logger.error(`deleteStudent DB Connection error\n: ${JSON.stringify(err)}`);
     return false;
   }
 };
 
-// 식당 CRUD
-exports.getRestaurants = async function (req, res) {
-  const { category } = req.query;
+// 학생 업데이트
+exports.updateStudent = async function (req, res) {
+  const { studentName, major, birth, address } = req.body;
+  const { studentIdx } = req.params;
 
-  try {
-    const connection = await pool.getConnection(async (conn) => conn);
-    try {
-      const [selectRestaurantsRows] = await indexDao.selectRestaurants(
-        connection,
-        category
-      );
-
-      return res.send({
-        result: selectRestaurantsRows,
-        isSuccess: true,
-        code: 200,
-        message: "식당 조회 성공",
-      });
-    } catch (err) {
-      logger.error(`getRestaurants Query error\n: ${JSON.stringify(err)}`);
-      return false;
-    } finally {
-      connection.release();
-    }
-  } catch (err) {
-    logger.error(
-      `getRestaurants DB Connection error\n: ${JSON.stringify(err)}`
-    );
-    return false;
-  }
-};
-
-exports.insertRestaurant = async function (req, res) {
-  const { title, address, category, videoUrl } = req.body;
-  const masterUserIdx = req.verifiedToken.masterUserIdx;
-
-  if (!title || !address || !category || !videoUrl) {
+  if (studentName && typeof studentName !== "string") {
     return res.send({
-      isSuccess: true,
-      code: 400,
-      message: "입력값을 확인하세요.",
+      isSuccess: false,
+      code: 400, // 요청 실패시 400번대 코드
+      message: "값을 정확히 입력해주세요.",
+    });
+  }
+  if (major && typeof major !== "string") {
+    return res.send({
+      isSuccess: false,
+      code: 400, // 요청 실패시 400번대 코드
+      message: "값을 정확히 입력해주세요.",
+    });
+  }
+  if (address && typeof address !== "string") {
+    return res.send({
+      isSuccess: false,
+      code: 400, // 요청 실패시 400번대 코드
+      message: "값을 정확히 입력해주세요.",
+    });
+  }
+
+  // birth : YYYY-MM-DD 형식 검사
+  var regex = RegExp(/^\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$/);
+  if (birth && !regex.test(birth)) {
+    return res.send({
+      isSuccess: false,
+      code: 400, // 요청 실패시 400번대 코드
+      message: "날짜 형식을 확인해주세요.",
     });
   }
 
   try {
     const connection = await pool.getConnection(async (conn) => conn);
     try {
-      // restaurantsIdx 설정 max+1
-      const [selectRestaurantIdxRows] = await indexDao.selectRestaurantIdx(
+      const isValidStudentIdx = await indexDao.isValidStudentIdx(
         connection,
-        masterUserIdx
+        studentIdx
       );
+      if (!isValidStudentIdx) {
+        return res.send({
+          isSuccess: false,
+          code: 410, // 요청 실패시 400번대 코드
+          message: "유효한 학생 인덱스가 아닙니다.",
+        });
+      }
 
-      const restaurantIdx = selectRestaurantIdxRows.restaurantIdx;
-
-      await indexDao.insertRestaurants(
+      const [rows] = await indexDao.updateStudents(
         connection,
-        restaurantIdx,
-        masterUserIdx,
-        title,
-        address,
-        category,
-        videoUrl
+        studentIdx,
+        studentName,
+        major,
+        birth,
+        address
       );
 
       return res.send({
         isSuccess: true,
-        code: 200,
-        message: "식당 생성 성공",
+        code: 200, // 요청 실패시 400번대 코드
+        message: "학생 수정 성공",
       });
     } catch (err) {
-      logger.error(`insertRestaurant Query error\n: ${JSON.stringify(err)}`);
+      logger.error(`updateStudent Query error\n: ${JSON.stringify(err)}`);
       return false;
     } finally {
       connection.release();
     }
   } catch (err) {
-    logger.error(
-      `insertRestaurant DB Connection error\n: ${JSON.stringify(err)}`
-    );
+    logger.error(`updateStudent DB Connection error\n: ${JSON.stringify(err)}`);
     return false;
   }
 };
-exports.updateRestaurant = async function (req, res) {};
-exports.deleteRestaurant = async function (req, res) {};
+
+// 학생 생성
+exports.createStudent = async function (req, res) {
+  const { studentName, major, birth, address } = req.body;
+
+  // studentName, major, address : 문자열
+  if (
+    typeof studentName !== "string" ||
+    typeof major !== "string" ||
+    typeof address !== "string"
+  ) {
+    return res.send({
+      isSuccess: false,
+      code: 400, // 요청 실패시 400번대 코드
+      message: "값을 정확히 입력해주세요.",
+    });
+  }
+  // birth : YYYY-MM-DD 형식 검사
+  var regex = RegExp(/^\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$/);
+  if (!regex.test(birth)) {
+    return res.send({
+      isSuccess: false,
+      code: 400, // 요청 실패시 400번대 코드
+      message: "날짜 형식을 확인해주세요.",
+    });
+  }
+
+  try {
+    const connection = await pool.getConnection(async (conn) => conn);
+    try {
+      const [rows] = await indexDao.insertStudents(
+        connection,
+        studentName,
+        major,
+        birth,
+        address
+      );
+
+      return res.send({
+        isSuccess: true,
+        code: 200, // 요청 실패시 400번대 코드
+        message: "학생 생성 성공",
+      });
+    } catch (err) {
+      logger.error(`createStudent Query error\n: ${JSON.stringify(err)}`);
+      return false;
+    } finally {
+      connection.release();
+    }
+  } catch (err) {
+    logger.error(`createStudent DB Connection error\n: ${JSON.stringify(err)}`);
+    return false;
+  }
+};
+
+// 학생 테이블 조회
+exports.readStudents = async function (req, res) {
+  const { studentIdx } = req.params;
+
+  try {
+    const connection = await pool.getConnection(async (conn) => conn);
+    try {
+      const [rows] = await indexDao.selectStudents(connection, studentIdx);
+
+      return res.send({
+        result: rows,
+        isSuccess: true,
+        code: 200, // 요청 실패시 400번대 코드
+        message: "요청 성공",
+      });
+    } catch (err) {
+      logger.error(`readStudents Query error\n: ${JSON.stringify(err)}`);
+      return false;
+    } finally {
+      connection.release();
+    }
+  } catch (err) {
+    logger.error(`readStudents DB Connection error\n: ${JSON.stringify(err)}`);
+    return false;
+  }
+};
+
+// 예시 코드
+exports.example = async function (req, res) {
+  try {
+    const connection = await pool.getConnection(async (conn) => conn);
+    try {
+      const [rows] = await indexDao.exampleDao(connection);
+
+      return res.send({
+        result: rows,
+        isSuccess: true,
+        code: 200, // 요청 실패시 400번대 코드
+        message: "요청 성공",
+      });
+    } catch (err) {
+      logger.error(`example Query error\n: ${JSON.stringify(err)}`);
+      return false;
+    } finally {
+      connection.release();
+    }
+  } catch (err) {
+    logger.error(`example DB Connection error\n: ${JSON.stringify(err)}`);
+    return false;
+  }
+};
