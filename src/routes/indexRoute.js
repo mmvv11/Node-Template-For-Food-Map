@@ -2,16 +2,15 @@ module.exports = function (app) {
   const index = require("../controllers/indexController");
   const jwtMiddleware = require("../../config/jwtMiddleware");
 
-  // 라우터 정의
-  // app.HTTP메서드(uri, 컨트롤러 콜백함수)
-  // app.get("/dummy", index.example);
+  app.post("/signin", index.signIn); // 로그인
 
-  // 학생 테이블 조회
-  app.get("/students/:studentIdx", index.readStudents);
-  // 학생 생성
-  app.post("/students", index.createStudent);
-  // 학생 업데이트
-  app.patch("/students/:studentIdx", index.updateStudent);
-  // 학생 삭제
-  app.delete("/students/:studentIdx", index.deleteStudent);
+  // 식당 CRUD
+  app.post("/restaurant", jwtMiddleware, index.insertRestaurant); // 식당 create
+  app.get("/restaurants", index.getRestaurants); // 식당 read
+  app.patch("/restaurant", jwtMiddleware, index.updateRestaurant); // 식당 update
+  app.delete(
+    "/restaurant/:restaurantIdx",
+    jwtMiddleware,
+    index.deleteRestaurant
+  ); // 식당 delete
 };
