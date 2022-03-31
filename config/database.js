@@ -2,8 +2,6 @@ const mysql = require("mysql2/promise");
 const { logger } = require("./winston");
 const secret = require("./secret");
 
-console.log(secret.host);
-
 const pool = mysql.createPool({
   host: secret.host,
   user: secret.user,

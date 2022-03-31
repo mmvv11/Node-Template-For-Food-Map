@@ -1,6 +1,6 @@
 const { pool } = require("../../config/database");
 
-exports.example = async function (connection, params) {
+exports.exampleDao = async function (connection, params) {
   const Query = ``;
   const Params = [];
 
